@@ -33,7 +33,7 @@ import (
 var Version = "0.0.1"
 
 var (
-	listenAddress         = kingpin.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9187").OverrideDefaultFromEnvar("PG_EXPORTER_WEB_LISTEN_ADDRESS").String()
+	listenAddress         = kingpin.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":8080").OverrideDefaultFromEnvar("PG_EXPORTER_WEB_LISTEN_ADDRESS").String()
 	metricPath            = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").OverrideDefaultFromEnvar("PG_EXPORTER_WEB_TELEMETRY_PATH").String()
 	disableDefaultMetrics = kingpin.Flag("disable-default-metrics", "Do not include default metrics.").Default("false").OverrideDefaultFromEnvar("PG_EXPORTER_DISABLE_DEFAULT_METRICS").Bool()
 	queriesPath           = kingpin.Flag("extend.query-path", "Path to custom queries to run.").Default("").OverrideDefaultFromEnvar("PG_EXPORTER_EXTEND_QUERY_PATH").String()
@@ -194,6 +194,10 @@ var builtinMetricMaps = map[string]map[string]ColumnMapping{
 		"mode":    {LABEL, "Type of Lock", nil, nil},
 		"count":   {GAUGE, "Number of locks", nil, nil},
 	},
+	"pg_database": {
+		"datname": {LABEL, "Name of the database", nil, nil},
+		"size": {GAUGE, "Disk space used by the database", nil, nil},
+	},
 	"pg_stat_replication": {
 		"procpid":          {DISCARD, "Process ID of a WAL sender process", nil, semver.MustParseRange("<9.2.0")},
 		"pid":              {DISCARD, "Process ID of a WAL sender process", nil, semver.MustParseRange(">=9.2.0")},
@@ -240,6 +244,29 @@ var builtinMetricMaps = map[string]map[string]ColumnMapping{
 		"state":           {LABEL, "connection state", nil, semver.MustParseRange(">=9.2.0")},
 		"count":           {GAUGE, "number of connections in this state", nil, nil},
 		"max_tx_duration": {GAUGE, "max duration in seconds any active transaction has been running", nil, nil},
+	},
+	"pg_stat_user_tables":{
+		"schemaname" : {LABEL, "Name of the schema that this table is in", nil, nil},
+		"relname": {LABEL, "Name of this table", nil, nil},
+		"seq_scan": {COUNTER, "Number of sequential scans initiated on this table", nil, nil},
+		"seq_tup_read": {COUNTER, "Number of live rows fetched by sequential scans", nil, nil},
+		"idx_scan": {COUNTER, "Number of index scans initiated on this table", nil, nil},
+		"idx_tup_fetch": {COUNTER, "Number of live rows fetched by index scans", nil, nil},
+		"n_tup_ins": {COUNTER, "Number of rows inserted", nil, nil},
+		"n_tup_upd": {COUNTER, "Number of rows updated", nil, nil},
+		"n_tup_del": {COUNTER, "Number of rows deleted", nil, nil},
+		"n_tup_hot_upd": {COUNTER, "Number of rows HOT updated (i.e., with no separate index update required)", nil, nil},
+		"n_live_tup": {GAUGE, "Estimated number of live rows", nil, nil},
+		"n_dead_tup": {GAUGE, "Estimated number of dead rows", nil, nil},
+		"n_mod_since_analyze": {GAUGE, "Estimated number of rows changed since last analyze", nil, nil},
+		"last_vacuum": {GAUGE, "Last time at which this table was manually vacuumed (not counting VACUUM FULL)", nil, nil},
+		"last_autovacuum": {GAUGE, "Last time at which this table was vacuumed by the autovacuum daemon", nil, nil},
+		"last_analyze": {GAUGE, "Last time at which this table was manually analyzed", nil, nil},
+		"last_autoanalyze": {GAUGE, "Last time at which this table was analyzed by the autovacuum daemon", nil, nil},
+		"vacuum_count": {COUNTER, "Number of times this table has been manually vacuumed (not counting VACUUM FULL)", nil, nil},
+		"autovacuum_count": {COUNTER, "Number of times this table has been vacuumed by the autovacuum daemon", nil, nil},
+		"analyze_count": {COUNTER, "Number of times this table has been manually analyzed", nil, nil},
+		"autoanalyze_count": {COUNTER, "Number of times this table has been analyzed by the autovacuum daemon", nil, nil},
 	},
 }
 
@@ -339,6 +366,47 @@ var queryOverrides = map[string][]OverrideQuery{
 			`,
 		},
 		// No query is applicable for 9.1 that gives any sensible data.
+	},
+	"pg_database": {
+	{
+		semver.MustParseRange(">=9.2.0"),
+		`
+		 SELECT
+			pg_database.datname,
+			pg_database_size(pg_database.datname) as size
+		 FROM pg_database
+	  `,
+	},
+},
+	"pg_stat_user_tables": {
+		{
+			semver.MustParseRange(">=9.2.0"),
+			`
+			SELECT
+				schemaname,
+				relname,
+				seq_scan,
+				seq_tup_read,
+				idx_scan,
+				idx_tup_fetch,
+				n_tup_ins,
+				n_tup_upd,
+				n_tup_del,
+				n_tup_hot_upd,
+				n_live_tup,
+				n_dead_tup,
+				n_mod_since_analyze,
+				last_vacuum,
+				last_autovacuum,
+				last_analyze,
+				last_autoanalyze,
+				vacuum_count,
+				autovacuum_count,
+				analyze_count,
+				autoanalyze_count
+			FROM pg_stat_user_tables
+			`,
+		},
 	},
 }
 
