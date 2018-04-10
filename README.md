@@ -26,7 +26,7 @@ export DATA_SOURCE_NAME="postgresql://login:password@hostname:port/dbname"
 ./postgres_exporter <flags>
 ```
 
-## Deploying the file to Cloud Foundry
+## Deploying the application to Cloud Foundry
 The beauty of the go applicatins are that they naturally run in cloud foundry
 ```
 go get github.com/SamwiseGambgee/postgres_exporter
