@@ -16,67 +16,64 @@ package rules
 
 import (
 	"go/ast"
-	"strings"
 
-	"github.com/GoASTScanner/gas"
+	gas "github.com/GoASTScanner/gas/core"
 )
 
-type blacklistedImport struct {
+type BlacklistImport struct {
 	gas.MetaData
-	Blacklisted map[string]string
+	Path string
 }
 
-func unquote(original string) string {
-	copy := strings.TrimSpace(original)
-	copy = strings.TrimLeft(copy, `"`)
-	return strings.TrimRight(copy, `"`)
-}
-
-func (r *blacklistedImport) Match(n ast.Node, c *gas.Context) (*gas.Issue, error) {
+func (r *BlacklistImport) Match(n ast.Node, c *gas.Context) (gi *gas.Issue, err error) {
 	if node, ok := n.(*ast.ImportSpec); ok {
-		if description, ok := r.Blacklisted[unquote(node.Path.Value)]; ok {
-			return gas.NewIssue(c, node, description, r.Severity, r.Confidence), nil
+		if r.Path == node.Path.Value && node.Name.String() != "_" {
+			return gas.NewIssue(c, n, r.What, r.Severity, r.Confidence), nil
 		}
 	}
 	return nil, nil
 }
 
-// NewBlacklistedImports reports when a blacklisted import is being used.
-// Typically when a deprecated technology is being used.
-func NewBlacklistedImports(conf gas.Config, blacklist map[string]string) (gas.Rule, []ast.Node) {
-	return &blacklistedImport{
+func NewBlacklist_crypto_md5(conf map[string]interface{}) (gas.Rule, []ast.Node) {
+	return &BlacklistImport{
 		MetaData: gas.MetaData{
-			Severity:   gas.Medium,
+			Severity:   gas.High,
 			Confidence: gas.High,
+			What:       "Use of weak cryptographic primitive",
 		},
-		Blacklisted: blacklist,
+		Path: `"crypto/md5"`,
 	}, []ast.Node{(*ast.ImportSpec)(nil)}
 }
 
-// NewBlacklistedImportMD5 fails if MD5 is imported
-func NewBlacklistedImportMD5(conf gas.Config) (gas.Rule, []ast.Node) {
-	return NewBlacklistedImports(conf, map[string]string{
-		"crypto/md5": "Blacklisted import crypto/md5: weak cryptographic primitive",
-	})
+func NewBlacklist_crypto_des(conf map[string]interface{}) (gas.Rule, []ast.Node) {
+	return &BlacklistImport{
+		MetaData: gas.MetaData{
+			Severity:   gas.High,
+			Confidence: gas.High,
+			What:       "Use of weak cryptographic primitive",
+		},
+		Path: `"crypto/des"`,
+	}, []ast.Node{(*ast.ImportSpec)(nil)}
 }
 
-// NewBlacklistedImportDES fails if DES is imported
-func NewBlacklistedImportDES(conf gas.Config) (gas.Rule, []ast.Node) {
-	return NewBlacklistedImports(conf, map[string]string{
-		"crypto/des": "Blacklisted import crypto/des: weak cryptographic primitive",
-	})
+func NewBlacklist_crypto_rc4(conf map[string]interface{}) (gas.Rule, []ast.Node) {
+	return &BlacklistImport{
+		MetaData: gas.MetaData{
+			Severity:   gas.High,
+			Confidence: gas.High,
+			What:       "Use of weak cryptographic primitive",
+		},
+		Path: `"crypto/rc4"`,
+	}, []ast.Node{(*ast.ImportSpec)(nil)}
 }
 
-// NewBlacklistedImportRC4 fails if DES is imported
-func NewBlacklistedImportRC4(conf gas.Config) (gas.Rule, []ast.Node) {
-	return NewBlacklistedImports(conf, map[string]string{
-		"crypto/rc4": "Blacklisted import crypto/rc4: weak cryptographic primitive",
-	})
-}
-
-// NewBlacklistedImportCGI fails if CGI is imported
-func NewBlacklistedImportCGI(conf gas.Config) (gas.Rule, []ast.Node) {
-	return NewBlacklistedImports(conf, map[string]string{
-		"net/http/cgi": "Blacklisted import net/http/cgi: Go versions < 1.6.3 are vulnerable to Httpoxy attack: (CVE-2016-5386)",
-	})
+func NewBlacklist_net_http_cgi(conf map[string]interface{}) (gas.Rule, []ast.Node) {
+	return &BlacklistImport{
+		MetaData: gas.MetaData{
+			Severity:   gas.High,
+			Confidence: gas.High,
+			What:       "Go versions < 1.6.3 are vulnerable to Httpoxy attack: (CVE-2016-5386)",
+		},
+		Path: `"net/http/cgi"`,
+	}, []ast.Node{(*ast.ImportSpec)(nil)}
 }

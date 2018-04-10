@@ -18,10 +18,6 @@ You may obtain a copy of the License [here](http://www.apache.org/licenses/LICEN
 Gas is still in alpha and accepting feedback from early adopters. We do
 not consider it production ready at this time.
 
-### Install
-
-`$ go get github.com/GoASTScanner/gas/cmd/gas/...`
-
 ### Usage
 
 Gas can be configured to only run a subset of rules, to exclude certain file
@@ -41,7 +37,6 @@ or to specify a set of rules to explicitly exclude using the '-exclude=' flag.
   - G103: Audit the use of unsafe block
   - G104: Audit errors not checked
   - G105: Audit the use of math/big.Int.Exp
-  - G106: Audit the use of ssh.InsecureIgnoreHostKey
   - G201: SQL query construction using format string
   - G202: SQL query construction using string concatenation
   - G203: Use of unescaped data in HTML templates
@@ -69,8 +64,12 @@ $ gas -exclude=G303 ./...
 
 #### Excluding files:
 
-Gas will ignore dependencies in your vendor directory any files
-that are not considered build artifacts by the compiler (so test files).
+Gas can be told to \ignore paths that match a supplied pattern using the 'skip' command line option. This is
+accomplished via [go-glob](github.com/ryanuber/go-glob). Multiple patterns can be specified as follows:
+
+```
+$ gas -skip=tests* -skip=*_example.go ./...
+```
 
 #### Annotating code
 
@@ -105,7 +104,7 @@ $ gas -nosec=true ./...
 
 ### Output formats
 
-Gas currently supports text, json, yaml, csv and JUnit XML output formats. By default
+Gas currently supports text, json and csv output formats. By default
 results will be reported to stdout, but can also be written to an output
 file. The output format is controlled by the '-fmt' flag, and the output file is controlled by the '-out' flag as follows:
 
@@ -114,21 +113,19 @@ file. The output format is controlled by the '-fmt' flag, and the output file is
 $ gas -fmt=json -out=results.json *.go
 ```
 
-### Generate TLS rule
+### Docker container
 
-The configuration of TLS rule can be generated from [Mozilla's TLS ciphers recommendation](https://statics.tls.security.mozilla.org/server-side-tls-conf.json).
+A Dockerfile is included with the Gas source code to provide a container that 
+allows users to easily run Gas on their code. It builds Gas, then runs it on 
+all Go files in your current directory. Use the following commands to build 
+and run locally:
 
+To build: (run command in cloned Gas source code directory)
+          docker build --build-arg http_proxy --build-arg https_proxy
+          --build-arg no_proxy -t goastscanner/gas:latest .
 
-First you need to install the generator tool:
+To run:  (run command in desired directory with Go files)
+          docker run -v $PWD:$PWD --workdir $PWD goastscanner/gas:latest
 
+Note: Docker version 17.05 or later is required (to permit multistage build).
 ```
-go get github.com/GoASTScanner/gas/cmd/tlsconfig/...
-```
-
-You can invoke now the `go generate` in the root of the project:
-
-```
-go generate ./...
-```
-
-This will generate the `rules/tls_config.go` file with will contain the current ciphers recommendation from Mozilla.

@@ -16,43 +16,41 @@ package rules
 
 import (
 	"go/ast"
-	"go/types"
+	"regexp"
+	"strings"
 
-	"github.com/GoASTScanner/gas"
+	gas "github.com/GoASTScanner/gas/core"
 )
 
-type subprocess struct {
-	gas.CallList
+type Subprocess struct {
+	pattern *regexp.Regexp
 }
 
-// TODO(gm) The only real potential for command injection with a Go project
-// is something like this:
-//
-// syscall.Exec("/bin/sh", []string{"-c", tainted})
-//
-// E.g. Input is correctly escaped but the execution context being used
-// is unsafe. For example:
-//
-// syscall.Exec("echo", "foobar" + tainted)
-func (r *subprocess) Match(n ast.Node, c *gas.Context) (*gas.Issue, error) {
-	if node := r.ContainsCallExpr(n, c); node != nil {
+func (r *Subprocess) Match(n ast.Node, c *gas.Context) (*gas.Issue, error) {
+	if node := gas.MatchCall(n, r.pattern); node != nil {
 		for _, arg := range node.Args {
-			if ident, ok := arg.(*ast.Ident); ok {
-				obj := c.Info.ObjectOf(ident)
-				if _, ok := obj.(*types.Var); ok && !gas.TryResolve(ident, c) {
-					return gas.NewIssue(c, n, "Subprocess launched with variable", gas.Medium, gas.High), nil
-				}
+			if !gas.TryResolve(arg, c) {
+				what := "Subprocess launching with variable."
+				return gas.NewIssue(c, n, what, gas.High, gas.High), nil
 			}
 		}
-		return gas.NewIssue(c, n, "Subprocess launching should be audited", gas.Low, gas.High), nil
+
+		// call with partially qualified command
+		if str, err := gas.GetString(node.Args[0]); err == nil {
+			if !strings.HasPrefix(str, "/") {
+				what := "Subprocess launching with partial path."
+				return gas.NewIssue(c, n, what, gas.Medium, gas.High), nil
+			}
+		}
+
+		what := "Subprocess launching should be audited."
+		return gas.NewIssue(c, n, what, gas.Low, gas.High), nil
 	}
 	return nil, nil
 }
 
-// NewSubproc detects cases where we are forking out to an external process
-func NewSubproc(conf gas.Config) (gas.Rule, []ast.Node) {
-	rule := &subprocess{gas.NewCallList()}
-	rule.Add("os/exec", "Command")
-	rule.Add("syscall", "Exec")
-	return rule, []ast.Node{(*ast.CallExpr)(nil)}
+func NewSubproc(conf map[string]interface{}) (gas.Rule, []ast.Node) {
+	return &Subprocess{
+		pattern: regexp.MustCompile(`^exec\.Command|syscall\.Exec$`),
+	}, []ast.Node{(*ast.CallExpr)(nil)}
 }

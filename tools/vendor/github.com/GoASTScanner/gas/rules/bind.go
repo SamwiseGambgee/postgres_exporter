@@ -18,37 +18,30 @@ import (
 	"go/ast"
 	"regexp"
 
-	"github.com/GoASTScanner/gas"
+	gas "github.com/GoASTScanner/gas/core"
 )
 
 // Looks for net.Listen("0.0.0.0") or net.Listen(":8080")
-type bindsToAllNetworkInterfaces struct {
+type BindsToAllNetworkInterfaces struct {
 	gas.MetaData
-	calls   gas.CallList
+	call    *regexp.Regexp
 	pattern *regexp.Regexp
 }
 
-func (r *bindsToAllNetworkInterfaces) Match(n ast.Node, c *gas.Context) (*gas.Issue, error) {
-	callExpr := r.calls.ContainsCallExpr(n, c)
-	if callExpr == nil {
-		return nil, nil
-	}
-	if arg, err := gas.GetString(callExpr.Args[1]); err == nil {
-		if r.pattern.MatchString(arg) {
-			return gas.NewIssue(c, n, r.What, r.Severity, r.Confidence), nil
+func (r *BindsToAllNetworkInterfaces) Match(n ast.Node, c *gas.Context) (gi *gas.Issue, err error) {
+	if node := gas.MatchCall(n, r.call); node != nil {
+		if arg, err := gas.GetString(node.Args[1]); err == nil {
+			if r.pattern.MatchString(arg) {
+				return gas.NewIssue(c, n, r.What, r.Severity, r.Confidence), nil
+			}
 		}
 	}
-	return nil, nil
+	return
 }
 
-// NewBindsToAllNetworkInterfaces detects socket connections that are setup to
-// listen on all network interfaces.
-func NewBindsToAllNetworkInterfaces(conf gas.Config) (gas.Rule, []ast.Node) {
-	calls := gas.NewCallList()
-	calls.Add("net", "Listen")
-	calls.Add("crypto/tls", "Listen")
-	return &bindsToAllNetworkInterfaces{
-		calls:   calls,
+func NewBindsToAllNetworkInterfaces(conf map[string]interface{}) (gas.Rule, []ast.Node) {
+	return &BindsToAllNetworkInterfaces{
+		call:    regexp.MustCompile(`^(net|tls)\.Listen$`),
 		pattern: regexp.MustCompile(`^(0.0.0.0|:).*$`),
 		MetaData: gas.MetaData{
 			Severity:   gas.Medium,

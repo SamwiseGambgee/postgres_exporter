@@ -15,13 +15,12 @@
 package rules
 
 import (
+	gas "github.com/GoASTScanner/gas/core"
 	"go/ast"
 	"go/types"
-
-	"github.com/GoASTScanner/gas"
 )
 
-type noErrorCheck struct {
+type NoErrorCheck struct {
 	gas.MetaData
 	whitelist gas.CallList
 }
@@ -30,7 +29,7 @@ func returnsError(callExpr *ast.CallExpr, ctx *gas.Context) int {
 	if tv := ctx.Info.TypeOf(callExpr); tv != nil {
 		switch t := tv.(type) {
 		case *types.Tuple:
-			for pos := 0; pos < t.Len(); pos++ {
+			for pos := 0; pos < t.Len(); pos += 1 {
 				variable := t.At(pos)
 				if variable != nil && variable.Type().String() == "error" {
 					return pos
@@ -45,11 +44,11 @@ func returnsError(callExpr *ast.CallExpr, ctx *gas.Context) int {
 	return -1
 }
 
-func (r *noErrorCheck) Match(n ast.Node, ctx *gas.Context) (*gas.Issue, error) {
+func (r *NoErrorCheck) Match(n ast.Node, ctx *gas.Context) (*gas.Issue, error) {
 	switch stmt := n.(type) {
 	case *ast.AssignStmt:
 		for _, expr := range stmt.Rhs {
-			if callExpr, ok := expr.(*ast.CallExpr); ok && r.whitelist.ContainsCallExpr(expr, ctx) == nil {
+			if callExpr, ok := expr.(*ast.CallExpr); ok && !r.whitelist.ContainsCallExpr(callExpr, ctx) {
 				pos := returnsError(callExpr, ctx)
 				if pos < 0 || pos >= len(stmt.Lhs) {
 					return nil, nil
@@ -60,7 +59,7 @@ func (r *noErrorCheck) Match(n ast.Node, ctx *gas.Context) (*gas.Issue, error) {
 			}
 		}
 	case *ast.ExprStmt:
-		if callExpr, ok := stmt.X.(*ast.CallExpr); ok && r.whitelist.ContainsCallExpr(stmt.X, ctx) == nil {
+		if callExpr, ok := stmt.X.(*ast.CallExpr); ok && !r.whitelist.ContainsCallExpr(callExpr, ctx) {
 			pos := returnsError(callExpr, ctx)
 			if pos >= 0 {
 				return gas.NewIssue(ctx, n, r.What, r.Severity, r.Confidence), nil
@@ -70,14 +69,13 @@ func (r *noErrorCheck) Match(n ast.Node, ctx *gas.Context) (*gas.Issue, error) {
 	return nil, nil
 }
 
-// NewNoErrorCheck detects if the returned error is unchecked
-func NewNoErrorCheck(conf gas.Config) (gas.Rule, []ast.Node) {
+func NewNoErrorCheck(conf map[string]interface{}) (gas.Rule, []ast.Node) {
 
 	// TODO(gm) Come up with sensible defaults here. Or flip it to use a
 	// black list instead.
 	whitelist := gas.NewCallList()
 	whitelist.AddAll("bytes.Buffer", "Write", "WriteByte", "WriteRune", "WriteString")
-	whitelist.AddAll("fmt", "Print", "Printf", "Println", "Fprint", "Fprintf", "Fprintln")
+	whitelist.AddAll("fmt", "Print", "Printf", "Println")
 	whitelist.Add("io.PipeWriter", "CloseWithError")
 
 	if configured, ok := conf["G104"]; ok {
@@ -87,7 +85,7 @@ func NewNoErrorCheck(conf gas.Config) (gas.Rule, []ast.Node) {
 			}
 		}
 	}
-	return &noErrorCheck{
+	return &NoErrorCheck{
 		MetaData: gas.MetaData{
 			Severity:   gas.Low,
 			Confidence: gas.High,

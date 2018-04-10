@@ -9,7 +9,6 @@ import (
 	"go/build"
 	"go/types"
 	"os"
-
 	"path/filepath"
 	"strings"
 
@@ -19,27 +18,6 @@ import (
 	"golang.org/x/tools/go/ssa"
 	"golang.org/x/tools/go/ssa/ssautil"
 )
-
-type sqlPackage struct {
-	packageName string
-	paramNames  []string
-	enable      bool
-}
-
-var sqlPackages = []sqlPackage{
-	{
-		packageName: "database/sql",
-		paramNames:  []string{"query"},
-	},
-	{
-		packageName: "github.com/jinzhu/gorm",
-		paramNames:  []string{"sql", "query"},
-	},
-	{
-		packageName: "github.com/jmoiron/sqlx",
-		paramNames:  []string{"query"},
-	},
-}
 
 func main() {
 	var verbose, quiet bool
@@ -60,45 +38,21 @@ func main() {
 	c := loader.Config{
 		FindPackage: FindPackage,
 	}
+	c.Import("database/sql")
 	for _, pkg := range pkgs {
 		c.Import(pkg)
 	}
 	p, err := c.Load()
-
 	if err != nil {
 		fmt.Printf("error loading packages %v: %v\n", pkgs, err)
 		os.Exit(2)
 	}
-
-	imports := getImports(p)
-	existOne := false
-	for i := range sqlPackages {
-		if _, exist := imports[sqlPackages[i].packageName]; exist {
-			if verbose {
-				fmt.Printf("Enabling support for %s\n", sqlPackages[i].packageName)
-			}
-			sqlPackages[i].enable = true
-			existOne = true
-		}
-	}
-	if !existOne {
-		fmt.Printf("No packages in %v include a supported database driver", pkgs)
-		os.Exit(2)
-	}
-
 	s := ssautil.CreateProgram(p, 0)
 	s.Build()
 
-	qms := make([]*QueryMethod, 0)
-
-	for i := range sqlPackages {
-		if sqlPackages[i].enable {
-			qms = append(qms, FindQueryMethods(sqlPackages[i], p.Package(sqlPackages[i].packageName).Pkg, s)...)
-		}
-	}
-
+	qms := FindQueryMethods(p.Package("database/sql").Pkg, s)
 	if verbose {
-		fmt.Println("database driver functions that accept queries:")
+		fmt.Println("database/sql functions that accept queries:")
 		for _, m := range qms {
 			fmt.Printf("- %s (param %d)\n", m.Func, m.Param)
 		}
@@ -121,7 +75,6 @@ func main() {
 	}
 
 	bad := FindNonConstCalls(res.CallGraph, qms)
-
 	if len(bad) == 0 {
 		if !quiet {
 			fmt.Println(`You're safe from SQL injection! Yay \o/`)
@@ -129,19 +82,14 @@ func main() {
 		return
 	}
 
-	if verbose {
-		fmt.Printf("Found %d potentially unsafe SQL statements:\n", len(bad))
-	}
-
+	fmt.Printf("Found %d potentially unsafe SQL statements:\n", len(bad))
 	for _, ci := range bad {
 		pos := p.Fset.Position(ci.Pos())
 		fmt.Printf("- %s\n", pos)
 	}
-	if verbose {
-		fmt.Println("Please ensure that all SQL queries you use are compile-time constants.")
-		fmt.Println("You should always use parameterized queries or prepared statements")
-		fmt.Println("instead of building queries from strings.")
-	}
+	fmt.Println("Please ensure that all SQL queries you use are compile-time constants.")
+	fmt.Println("You should always use parameterized queries or prepared statements")
+	fmt.Println("instead of building queries from strings.")
 	os.Exit(1)
 }
 
@@ -156,7 +104,7 @@ type QueryMethod struct {
 
 // FindQueryMethods locates all methods in the given package (assumed to be
 // package database/sql) with a string parameter named "query".
-func FindQueryMethods(sqlPackages sqlPackage, sql *types.Package, ssa *ssa.Program) []*QueryMethod {
+func FindQueryMethods(sql *types.Package, ssa *ssa.Program) []*QueryMethod {
 	methods := make([]*QueryMethod, 0)
 	scope := sql.Scope()
 	for _, name := range scope.Names() {
@@ -174,7 +122,7 @@ func FindQueryMethods(sqlPackages sqlPackage, sql *types.Package, ssa *ssa.Progr
 				continue
 			}
 			s := m.Type().(*types.Signature)
-			if num, ok := FuncHasQuery(sqlPackages, s); ok {
+			if num, ok := FuncHasQuery(s); ok {
 				methods = append(methods, &QueryMethod{
 					Func:     m,
 					SSA:      ssa.FuncValue(m),
@@ -187,16 +135,16 @@ func FindQueryMethods(sqlPackages sqlPackage, sql *types.Package, ssa *ssa.Progr
 	return methods
 }
 
+var stringType types.Type = types.Typ[types.String]
+
 // FuncHasQuery returns the offset of the string parameter named "query", or
 // none if no such parameter exists.
-func FuncHasQuery(sqlPackages sqlPackage, s *types.Signature) (offset int, ok bool) {
+func FuncHasQuery(s *types.Signature) (offset int, ok bool) {
 	params := s.Params()
 	for i := 0; i < params.Len(); i++ {
 		v := params.At(i)
-		for _, paramName := range sqlPackages.paramNames {
-			if v.Name() == paramName {
-				return i, true
-			}
+		if v.Name() == "query" && v.Type() == stringType {
+			return i, true
 		}
 	}
 	return 0, false
@@ -214,16 +162,6 @@ func FindMains(p *loader.Program, s *ssa.Program) []*ssa.Package {
 		}
 	}
 	return mains
-}
-
-func getImports(p *loader.Program) map[string]interface{} {
-	pkgs := make(map[string]interface{})
-	for _, pkg := range p.AllPackages {
-		if pkg.Importable {
-			pkgs[pkg.Pkg.Path()] = nil
-		}
-	}
-	return pkgs
 }
 
 // FindNonConstCalls returns the set of callsites of the given set of methods
@@ -248,18 +186,6 @@ func FindNonConstCalls(cg *callgraph.Graph, qms []*QueryMethod) []ssa.CallInstru
 			if _, ok := okFuncs[edge.Site.Parent()]; ok {
 				continue
 			}
-
-			isInternalSQLPkg := false
-			for _, pkg := range sqlPackages {
-				if pkg.packageName == edge.Caller.Func.Pkg.Pkg.Path() {
-					isInternalSQLPkg = true
-					break
-				}
-			}
-			if isInternalSQLPkg {
-				continue
-			}
-
 			cc := edge.Site.Common()
 			args := cc.Args
 			// The first parameter is occasionally the receiver.
@@ -269,14 +195,7 @@ func FindNonConstCalls(cg *callgraph.Graph, qms []*QueryMethod) []ssa.CallInstru
 				panic("arg count mismatch")
 			}
 			v := args[m.Param]
-
 			if _, ok := v.(*ssa.Const); !ok {
-				if inter, ok := v.(*ssa.MakeInterface); ok && types.IsInterface(v.(*ssa.MakeInterface).Type()) {
-					if inter.X.Referrers() == nil || inter.X.Type() != types.Typ[types.String] {
-						continue
-					}
-				}
-
 				bad = append(bad, edge.Site)
 			}
 		}
