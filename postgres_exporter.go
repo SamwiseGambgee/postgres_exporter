@@ -194,9 +194,25 @@ var builtinMetricMaps = map[string]map[string]ColumnMapping{
 		"mode":    {LABEL, "Type of Lock", nil, nil},
 		"count":   {GAUGE, "Number of locks", nil, nil},
 	},
+	"pg_query_stat":{
+		"pid":{LABEL, "Process ID ", nil, nil},
+		"duration":{GAUGE, "Duration of the query", nil, nil},
+		"query":{LABEL, "Name of the query", nil, nil},
+		"state":{LABEL, "State of the query", nil, nil},
+	},
 	"pg_database": {
 		"datname": {LABEL, "Name of the database", nil, nil},
 		"size": {GAUGE, "Disk space used by the database", nil, nil},
+	},
+	"pg_statio_user_tables": {
+		"heap_read" : {GAUGE, "Heap reads", nil, nil},
+		"heap_hit" : {GAUGE, "Heap hits", nil, nil},
+		"ratio" : {GAUGE, "Ratio", nil, nil},
+	},
+	"pg_table_details" : {
+		"schemaname" : {LABEL, "Name of the schema that this table is in", nil, nil},
+		"table_name" : {LABEL, "Name of this table", nil, nil},
+		"table_size" : {GAUGE, "Size of this table", nil, nil},
 	},
 	"pg_stat_replication": {
 		"procpid":          {DISCARD, "Process ID of a WAL sender process", nil, semver.MustParseRange("<9.2.0")},
@@ -303,6 +319,35 @@ var queryOverrides = map[string][]OverrideQuery{
 			  GROUP BY database, lower(mode)
 			) AS tmp2
 			ON tmp.mode=tmp2.mode and pg_database.oid = tmp2.database ORDER BY 1`,
+		},
+	},
+
+	"pg_query_stat": {
+		{
+			semver.MustParseRange(">0.0.0"),
+			` SELECT pid, now() - pg_stat_activity.query_start AS duration, query, state
+				FROM pg_stat_activity
+				WHERE state != 'idle'
+				AND
+				query NOT ILIKE '%pg_stat_activity%' AND (now() - pg_stat_activity.query_start)	> interval '5 minutes'`,
+		},
+	},
+
+	"pg_table_details" : {
+		{
+			semver.MustParseRange(">0.0.0"),
+			`SELECT nspname as "schemaname", relname AS "table_name", pg_size_pretty(pg_table_size(C.oid)) AS "table_size"
+				FROM pg_class C
+				LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
+				WHERE nspname NOT IN ('pg_catalog', 'information_schema') AND nspname !~ '^pg_toast' AND relkind IN ('r')`,
+		},
+	},
+
+	"pg_statio_user_tables" : {
+		{
+			semver.MustParseRange(">0.0.0"),
+			`SELECT sum(heap_blks_read) as heap_read, sum(heap_blks_hit)  as heap_hit, (sum(heap_blks_hit) - sum(heap_blks_read)) / sum(heap_blks_hit) as ratio
+				FROM pg_statio_user_tables;`,
 		},
 	},
 
