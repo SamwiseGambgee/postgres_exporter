@@ -78,9 +78,9 @@ pg_stat_user_tables:
     - autoanalyze_count:
         usage: "COUNTER"
         description: "Number of times this table has been analyzed by the autovacuum daemon"
-        
+
 pg_database:
-  query: " SELECT pg_database.datname, pg_database_size(pg_database.datname) as size FROM pg_database" 
+  query: " SELECT pg_database.datname, pg_database_size(pg_database.datname) as size FROM pg_database"
   metrics:
     - datname:
         usage: "LABEL"
@@ -88,3 +88,16 @@ pg_database:
     - size:
         usage: "GAUGE"
         description: "Disk space used by the database"
+
+pg_classification:
+  query: " SELECT Modality, count(*) as insert_count
+    FROM provenance.provenancedata
+    WHERE classificationservice_received >= TIMESTAMP 'today' AND classificationservice_received < TIMESTAMP 'tomorrow'
+    GROUP BY Modality"
+  metrics:
+    - Modality:
+        usage: "LABEL"
+        description: "Modality"
+    - insert_count:
+        usage: "COUNTER"
+        description: "Inserts done"

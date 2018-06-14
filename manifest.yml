@@ -1,14 +1,12 @@
 ---
 applications:
-  - name: APP-NAME
+  - name: SamplePost4
     memory: 512M
     instances: 1
     buildpack: https://github.com/cloudfoundry/go-buildpack.git
-    domain: DOMAIN
+    domain: eu-west.philips-healthsuite.com
     env:
       GOPACKAGENAME: github.com/wrouesnel/postgres_exporter
       DATA_SOURCE_USER: 'USER'
-      DATA_SOURCE_PASS: 'PASS'
+      DATA_SOURCE_PASS: 'PWD`'
       DATA_SOURCE_URI: 'URI'
-    services:
-      - SERVICE-NAME
