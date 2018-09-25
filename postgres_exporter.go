@@ -164,46 +164,6 @@ var builtinMetricMaps = map[string]map[string]ColumnMapping{
 	// 	"buffers_alloc":         {COUNTER, "Number of buffers allocated", nil, nil},
 	// 	"stats_reset":           {COUNTER, "Time at which these statistics were last reset", nil, nil},
 	// },
-	// "pg_classification":{
-	// 	"modality": 		{LABEL, "Modality", nil, nil},
-	// 	"insert_count": {COUNTER, "Insert count at Classification Service", nil, nil},
-	// },
-	// "pg_collection":{
-	// 	"modality": 		{LABEL, "Modality", nil, nil},
-	// 	"insert_count": {COUNTER, "Insert count at Collection Service", nil, nil},
-	// },
-	// "pg_msgforker":{
-	// 	"modality": 		{LABEL, "Modality", nil, nil},
-	// 	"insert_count": {COUNTER, "Insert count at Message forker Service", nil, nil},
-	// },
-	// "pg_ingchckpoint":{
-	// 	"modality": 		{LABEL, "Modality", nil, nil},
-	// 	"insert_count": {COUNTER, "Insert count at Ingestion checkpoint Service", nil, nil},
-	// },
-	// "pg_regulator":{
-	// 	"modality": 		{LABEL, "Modality", nil, nil},
-	// 	"insert_count": {COUNTER, "Insert count at Regulator Service", nil, nil},
-	// },
-	// "pg_decomposer":{
-	// 	"modality": 		{LABEL, "Modality", nil, nil},
-	// 	"insert_count": {COUNTER, "Insert count at Decomposer Service", nil, nil},
-	// },
-	"pg_wrkflwmgr":{
-		"modality": 		{LABEL, "Modality", nil, nil},
-		"insert_count": {COUNTER, "Insert count at Workflow manager Service", nil, nil},
-	},
-	// "pg_router":{
-	// 	"modality": 		{LABEL, "Modality", nil, nil},
-	// 	"insert_count": {COUNTER, "Insert count at Router Service", nil, nil},
-	// },
-	"pg_soapgtwy":{
-		"modality": 		{LABEL, "Modality", nil, nil},
-		"insert_count": {COUNTER, "Insert count at SOAP Gateway Service", nil, nil},
-	},
-	"pg_restgtwy":{
-		"modality": 		{LABEL, "Modality", nil, nil},
-		"insert_count": {COUNTER, "Insert count at REST Gateway Service", nil, nil},
-	},
 	// "pg_stat_database": {
 	// 	"datid":          {LABEL, "OID of a database", nil, nil},
 	// 	"datname":        {LABEL, "Name of this database", nil, nil},
@@ -412,53 +372,6 @@ var queryOverrides = map[string][]OverrideQuery{
 // 		},
 // 	},
 
-	"pg_wrkflwmgr": {
-		{
-			semver.MustParseRange(">0.0.0"),
-				`SELECT Modality, count(workflowmanager_received) as insert_count
-					FROM provenance.provenancedata
-					GROUP BY Modality`,
-		},
-	},
-
-	"pg_soapgtwy": {
-		{
-semver.MustParseRange(">0.0.0"),
-				`SELECT Modality, count(soapgatewayservice_received) as insert_count
-					FROM provenance.provenancedata
-					GROUP BY Modality`,
-		},
-	},
-
-	"pg_restgtwy": {
-		{
-semver.MustParseRange(">0.0.0"),
-				`SELECT Modality, count(restingestiongatewayservice_received) as insert_count
-					FROM provenance.provenancedata
-					GROUP BY Modality`,
-		},
-	},
-
-	// Not needed for monitoring
-	// "pg_regulator": {
-	// 	{
-	// 		semver.MustParseRange(">0.0.0"),
-	// 			`SELECT Modality, count(regulatorservice_received) as insert_count
-	// 				FROM provenance.provenancedata
-	// 				GROUP BY Modality`,
-	// 	},
-	// },
-
-	// Not needed for monitoring
-	// "pg_decomposer": {
-	// 	{
-	// 		semver.MustParseRange(">0.0.0"),
-	// 			`SELECT Modality, count(decomposerservice_received) as insert_count
-	// 				FROM provenance.provenancedata
-	// 				GROUP BY Modality`,
-	// 	},
-	// },
-//
 // 	"pg_query_stat": {
 // 		{
 // 			semver.MustParseRange(">0.0.0"),
